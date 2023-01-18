@@ -2,14 +2,16 @@
 module DateCombinators.Tests where
 
 
-import           Chronos hiding (day)
+import           Chronos hiding (day, second)
 import           Data.Array
+import qualified Data.HashMap.Strict as HM
 import qualified Data.Maybe as Unsafe
 import qualified Data.Set as S
 import qualified Data.Time.Calendar as C
-import           Data.Time.Calendar.WeekDate
+import           Data.Time.Calendar.WeekDate hiding (Year)
 import           Data.Tuple.Select
 import           DateCombinators
+import           DateCombinators.Parser
 import           Test.Hspec hiding (before, after)
 import           Test.QuickCheck
 import           Yahp
@@ -24,12 +26,12 @@ main = hspec $ do
 
   describe "dayToWeekday" $ do
       it "should be identical to the `time` version" $ do
-       property $ \i -> mod (weekday2 $ C.ModifiedJulianDay i) 7 ===  getDayOfWeek (dayToDayOfWeek (Day $ fromIntegral i))
+       property $ \i -> mod (weekday2 $ C.ModifiedJulianDay i) 7 ===  getDayOfWeek (Chronos.dayOfWeek (Day $ fromIntegral i))
 
   describe "DateCombinators" $ do
       let cmp i (a,b, c) =  it ("should satisfy case " <> show i) $ shouldBe (diffBusinessDays cal a b) c
           dd = toDay 2020
-          cal = Unsafe.fromJust $ generateBusinessDayBimap $ toDay' <$>  [(2018,1,1),(2020,5,1), (2020,5,5) , (2020,5,3), (2020,5,4), (2022,1,1)]
+          cal = Unsafe.fromJust $ generateHolidayCalendar $ toDay' <$>  [(2018,1,1),(2020,5,1), (2020,5,5) , (2020,5,3), (2020,5,4), (2022,1,1)]
       zipWithM_ cmp [(1::Int)..]
         [(dd 5 3, dd 5 3    , 0)
         ,(dd 5 2, dd 5 2    , 0)
@@ -43,8 +45,8 @@ main = hspec $ do
   describe "DateCombinators" $ do
       let cmp i (a,b) =  it ("should satisfy case " <> show i) $ on shouldBe showDay a b
           dd = toDay 2020
-          cal = Unsafe.fromJust $ generateBusinessDayBimap $ toDay' <$>  [(2018,1,1),(2020,5,1), (2020,5,5) , (2020,5,3), (2020,5,4), (2022,1,1)]
-          bday = businessDay cal
+          cal = Unsafe.fromJust $ generateHolidayCalendar $ toDay' <$>  [(2018,1,1),(2020,5,1), (2020,5,5) , (2020,5,3), (2020,5,4), (2022,1,1)]
+          bday = businessDay' cal
       zipWithM_ cmp [(1::Int)..]
         [(1 `weekday` before (dd april 4)       , dd april 3)
         ,(1 `weekday` after (dd april 4)        , dd april 6)
@@ -79,12 +81,34 @@ main = hspec $ do
       it "checks bounds2" $ shouldThrow (flip seq (pure ()) $ (-6) `wed` month (dd april 3)) (== IndexOutOfRange "-6")
       it "checks bounds3" $ shouldThrow (flip seq (pure ()) $ 6 `wed` invert (month $ dd april 3)) (== IndexOutOfRange "6")
       it "checks bounds3" $ shouldThrow (flip seq (pure ()) $ (-6) `wed` invert (month $ dd april 3)) (== IndexOutOfRange "-6")
-      it "outside of calendar" $ shouldThrow (flip seq (pure ()) $ 1 `bday` (month $ toDay 2017 april 3)) (\(DayNotInCalendar _) -> True)
+      it "outside of calendar" $ shouldThrow (flip seq (pure ()) $ 1 `bday` (month $ toDay 2017 april 3)) (\case {DayNotInCalendar _ -> True; _ -> False })
 
-  describe "generateBusinessDayBimap" $ do
+  describe "DateCominators.Parser" $ do
+      let cmp i a b =  it ("should satisfy case " <> show i) $ shouldBe a b
+          runExprM q = eitherException $ runExprParser multipleFuncWithFinalListParser (HM.fromList [("de", cal1)]) q 
+          runExprM2 q = eitherException $ runExprParser multipleFuncWithFinalListParserExec (HM.fromList [("de", cal1)]) q 
+          cal1 = Unsafe.fromJust $ generateHolidayCalendar $ toDay' <$>  [(2018,1,1),(2020,5,1), (2020,5,5) , (2020,5,3), (2020,5,4), (2025,1,1)]
+            where toDay' (y,m,d) = toDay y m d
+      sequence_ $ zipWith3 cmp [(1::Int)..]
+        [show (runExprM "jan" $ Year 2022 :: [([Text], DateRange)])
+        ,show (runExprM2 "[jan, feb]" $ Year 2022 :: [DateRange])
+        ,show (showDay <$> runExprM2 "1 fri [jan, feb]" (Year 2022))
+        ,show (showDay <$> runExprM2 "[2 wday after 1 fri jan, -1 wday feb]" (Year 2022))
+        ,show (second showDay <$> runExprM "1 bday@de before [2 wday after 1 fri jan, -1 wday feb]" (Year 2022))
+        ,show (second showDay <$> runExprM "1 wday onOrBefore 23 day  nov " (Year 1800))
+        ]
+        ["[([\"jan\"],(Finite \"2022.01.01\",Finite \"2022.01.31\"))]"
+        ,"[(Finite \"2022.01.01\",Finite \"2022.01.31\"),(Finite \"2022.02.01\",Finite \"2022.02.28\")]"
+        ,"[\"2022.01.07\",\"2022.02.04\"]"
+        ,"[\"2022.01.11\",\"2022.02.28\"]"
+        ,"[([\"bday\",\"before\",\"wday\",\"after\",\"fri\",\"jan\"],\"2022.01.10\"),([\"bday\",\"before\",\"wday\",\"feb\"],\"2022.02.27\")]"
+        ,"[([\"wday\",\"onOrBefore\",\"day\",\"nov\"],\"1800.11.21\")]"
+        ]
+
+  describe "generateHolidayCalendar" $ do
     it "satisfies a list of properties" $
       let allWeekDays2 f t = filter isWeekend [f..t]
-          prop2 hs = maybe (property True) (prop hs . bdBimap) $ generateBusinessDayBimap hs
+          prop2 hs = maybe (property True) (prop hs . bdBimap) $ generateHolidayCalendar hs
           prop hs (dToB, bToD) = counterexample (show (holidays, mapping)) $
                                  conjoin [let probs = filter (\(d,bd) -> not $ S.member d holidays ==
                                                                not (isJust $ toBusinessDay bd)) mapping
@@ -103,7 +127,7 @@ main = hspec $ do
       in property (prop2 . fmap Day) .&&. property (\f t -> prop2 $ allWeekDays2 (Day f) (Day t))
 
   describe "addBusinessDays" $ do
-    let cal = Unsafe.fromJust $ generateBusinessDayBimap $ toDay' <$>  [(2018,1,1),(2020,5,1), (2020,5,5) , (2020,5,3), (2020,5,4), (2022,1,1)]
+    let cal = Unsafe.fromJust $ generateHolidayCalendar $ toDay' <$>  [(2018,1,1),(2020,5,1), (2020,5,5) , (2020,5,3), (2020,5,4), (2022,1,1)]
         cases =                       [ (-1,    (2020, 5, 4), (2020, 4, 30)   )
                                       , (1,     (2020, 5, 4), (2020, 5, 6)    )
                                       , (0,     (2020, 5, 1), (2020, 4, 30)   )
@@ -119,3 +143,36 @@ weekday2 = sel3 . toWeekDate
 
 toDay' :: (Year, Month, DayOfMonth) -> Day
 toDay' (y,m,d) = toDay y m d
+
+
+
+-- * Example 
+
+ex1 = showDay $ eitherException (runExpr "1 mon month") (toDay 2020 4 9) 
+
+ex2 = eitherException (runExpr "jan") $ Year 2022 :: DateRange
+
+runExpr q = runExprParser multipleFuncParser (HM.fromList [("de", cal1)]) q 
+
+-- runExprM q = showDay $ runExprParser multipleFuncParser (HM.fromList [("de", cal1)]) q (toDay 2020 4 9)
+
+-- runExpr "1 bday@de month 1 monthAfter"
+-- "2020.05.02"
+-- runExpr "1 bday@de before -2 wday month"
+-- "2020.04.28"
+
+-- ex3 = mapM_ (putStrLn . show)
+--   [show (runExprM "jan" $ Year 2022 :: [DateRange])
+--   ,show (runExprM "[jan, feb, everyMonth]" $ Year 2022 :: [DateRange])
+--   ,show (showDay <$> runExprM "1 fri [jan, feb, everyMonth]" (Year 2022))
+--   ,show (showDay <$> runExprM "[2 wday after 1 fri jan, -1 wday feb]" (Year 2022))
+--   ,show (showDay <$> runExprM "1 bday@de before [2 wday after 1 fri jan, -1 wday feb]" (Year 2022))
+--   ,show (showDay <$> runExprM "1 wday onOrBefore 19 day  nov " (Year 2))
+--   ]
+
+runExprM :: (Typeable res, Typeable val) => Text -> val -> [([Text], res)]
+runExprM q = eitherException $ runExprParser multipleFuncWithFinalListParser cals q 
+
+cal1 = Unsafe.fromJust $ generateHolidayCalendar $ toDay' <$>  [(2018,1,1),(2020,5,1), (2020,5,5) , (2020,5,3), (2020,5,4), (2025,1,1)]
+  where toDay' (y,m,d) = toDay y m d
+cals = HM.fromList [("de", cal1)]

@@ -1,26 +1,50 @@
 {
+    "chronos": {
+        "branch": "master",
+        "description": "Haskell time library focusing on performance ",
+        "homepage": null,
+        "owner": "johannesgerer",
+        "repo": "chronos",
+        "rev": "9dc993b1a9b6b5867a9c10b81a72fdb306c6387c",
+        "sha256": "0bj8jvz41abybvbdj9yh24bz7fscrpxi567ajp8cml73l2yphylc",
+        "type": "tarball",
+        "url": "https://github.com/johannesgerer/chronos/archive/9dc993b1a9b6b5867a9c10b81a72fdb306c6387c.tar.gz",
+        "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
+    },
     "interval": {
         "branch": "main",
         "description": "Haskell library for finite and infinite intervals of any ordered type",
         "homepage": null,
-        "owner": "mxgr7",
+        "owner": "johannesgerer",
         "repo": "interval",
-        "rev": "012388c1c221bb47ca2b03f3eec5cf8048730e26",
-        "sha256": "02zvx1hi6k27mh1vmy4bdi0f32yydcbpvdz7ivmkrcvipdnchs06",
+        "rev": "a2b9c3b64cb6adb1ab9c361b737b48d4970c0891",
+        "sha256": "1hwsz6wpdzxw1w0d6dqdqrr22h5pa90qnjfq4143vr1as2r2py54",
         "type": "tarball",
-        "url": "https://github.com/mxgr7/interval/archive/012388c1c221bb47ca2b03f3eec5cf8048730e26.tar.gz",
+        "url": "https://github.com/johannesgerer/interval/archive/a2b9c3b64cb6adb1ab9c361b737b48d4970c0891.tar.gz",
+        "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
+    },
+    "nixpkgs": {
+        "branch": "master",
+        "description": "Nix Packages collection",
+        "homepage": "",
+        "owner": "nixos",
+        "repo": "nixpkgs",
+        "rev": "2b54954fdb4a25c6f9cf80cfd36c43e4c4577c0b",
+        "sha256": "1sn4az6xc2ag23pnxhh8dbgxnk757d5d63spnv93bnls9k3d9vrg",
+        "type": "tarball",
+        "url": "https://github.com/nixos/nixpkgs/archive/2b54954fdb4a25c6f9cf80cfd36c43e4c4577c0b.tar.gz",
         "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
     },
     "yahp": {
         "branch": "main",
         "description": "yet another Haskell prelude",
         "homepage": null,
-        "owner": "mxgr7",
+        "owner": "johannesgerer",
         "repo": "yahp",
-        "rev": "78a12434bd8dcc00c942fea07e4cdcf19ab596b6",
-        "sha256": "1xf03sfmbhw0zn93dza183kwjfb22qy1zbmrin4ly6676iqha4hr",
+        "rev": "5e0e7b52b8df9c1d05a159400934c47f499aed44",
+        "sha256": "1crsk614kc8384lvgdgxn4laxkcq9cbdmiz0w1mzqkrmcsv2jx13",
         "type": "tarball",
-        "url": "https://github.com/mxgr7/yahp/archive/78a12434bd8dcc00c942fea07e4cdcf19ab596b6.tar.gz",
+        "url": "https://github.com/johannesgerer/yahp/archive/5e0e7b52b8df9c1d05a159400934c47f499aed44.tar.gz",
         "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
     }
 }
