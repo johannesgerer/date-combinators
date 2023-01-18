@@ -14,9 +14,8 @@ version:            0.1.0.0
 -- The license under which the package is released.
 license: Apache-2.0
 
--- A copyright notice.
--- copyright:
--- category:
+author: Johannes Gerer
+copyright: 2022-2023 Johannes Gerer
 
 library
 
@@ -25,24 +24,35 @@ library
         DateCombinators.Tests
         DateCombinators.BusinessDay
         DateCombinators.Utils
+        DateCombinators.Parser
 
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:
-    build-depends:    QuickCheck
-                    , array
-                    , base
-                    , chronos
-                    , containers
-                    , hspec
-                    , interval
-                    , lens
-                    , mtl
-                    , text
-                    , time
-                    , torsor
-                    , tuple
-                    , yahp
-                    
+    build-depends:   QuickCheck
+                   , array
+                   , base
+                   , base
+                   , chronos
+                   , containers
+                   , hspec
+                   , interval
+                   , lens
+                   , mtl
+                   , parsec
+                   , parsec3-numbers
+                   , text
+                   , text-show
+                   , time
+                   , torsor
+                   , tuple
+                   , unordered-containers
+                   , serialise
+                   , cereal
+                   , cereal-text
+                   , vector
+                   , vector-algorithms
+                   , yahp
+
     ghc-options:
      -Werror=partial-fields
      -Werror=incomplete-record-updates
@@ -108,11 +118,11 @@ test-suite test1
     test
   build-depends:
                       base
-                    , date-combinators
+                , date-combinators
+                , unordered-containers
 
   default-language: Haskell2010
            
-t
 -- Local Variables:
 -- compile-command: "nix-shell --run 'cabal exec -- ghc-pkg list'"
 -- End:

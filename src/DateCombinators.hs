@@ -1,17 +1,18 @@
 {-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
+{-# LANGUAGE NoMonomorphismRestriction #-}
      
 module DateCombinators
   (module DateCombinators
   ,module S
   ) where
 
-import Chronos
-import Control.Lens
-import Data.String
-import DateCombinators.BusinessDay as S
-import DateCombinators.Utils as S hiding (lm2, lm)
-import Interval
-import Yahp
+import           Chronos
+import           Control.Lens
+import qualified Data.HashMap.Strict as HM
+import           DateCombinators.BusinessDay as S
+import           DateCombinators.Utils as S hiding (lm2, lm)
+import           Interval
+import           Yahp
 
 -- * Types
 
@@ -28,16 +29,9 @@ invert :: DateRange -> DateRange
 invert (DateRange s e) = DateRange e s
 
 
-type NthExtractor = Int -> DateRange -> Day 
+type NthExtractor = Int -> DateRange -> Chronos.Day 
 
 type RangeConstructor = Day -> DateRange
-
-data DateCombinatorsException = IndexOutOfRange String
-                              | InfinitDate
-                              | ZeroIndex
-                              deriving (Generic, Show, Eq)
-
-instance Exception DateCombinatorsException
 
 -- * Helper functions
 
@@ -52,7 +46,7 @@ buildNthFromEnum enum i = g (abs i) . enum . if i < 0 then invert else id
 
 -- | the constructor should move within a given set of dates, according in the following way
 -- `gen n day` will move `n-1` steps forward starting from the first valid date AFTER `day` 
-buildNthFromDirectConstructor :: (Int -> Day -> Day) -> NthExtractor
+buildNthFromDirectConstructor :: HasCallStack => (Int -> Day -> Day) -> NthExtractor
 buildNthFromDirectConstructor gen i' (DateRange s e) | i'>0  = check (<=) e s
                                                      | i'<0  = check (>=) s e
                                                      | True = throw ZeroIndex
@@ -72,9 +66,25 @@ buildNthFromDirectConstructor gen i' (DateRange s e) | i'>0  = check (<=) e s
 
 
 jan, feb, mar, apr, may, jun, jul, aug, sep, oct, nov, dec :: Year -> DateRange
-[jan, feb, mar, apr, may, jun, jul, aug, sep, oct, nov, dec] = g <$> [0..11]
+[jan, feb, mar, apr, may, jun, jul, aug, sep, oct, nov, dec] = everyMonth'
+
+everyMonth' :: [Year -> DateRange]
+everyMonth' = g <$> [january..december]
   where g m y = month $ dateToDay $ Date y m 1
 
+everyMonth :: Year -> [DateRange]
+everyMonth = sequence everyMonth'
+
+everyQuarter' :: [Year -> DateRange]
+everyQuarter' = g <$> [january, april, july, october]
+  where g m y = DateRange (Finite start) $ Finite $ addDays (-1) $ addGregorianMonths 3 start
+          where start = dateToDay $ Date y m 1
+
+everyQuarter :: Year -> [DateRange]
+everyQuarter = sequence everyQuarter'
+
+q1, q2, q3, q4 :: Year -> DateRange
+[q1, q2, q3, q4] = everyQuarter'
 
 onOrAfter, after, before, onOrBefore :: RangeConstructor
 onOrAfter       d = DateRange (Finite d)                PositiveInfinity
@@ -94,10 +104,13 @@ weekday = buildNthFromDirectConstructor addWeekdays
 day :: NthExtractor
 day = buildNthFromDirectConstructor addDays
 
-businessDay :: HasCallStack => BusinessDayBimap -> NthExtractor
-businessDay = buildNthFromDirectConstructor . addBusinessDays
+businessDay' :: HasCallStack => HolidayCalendar -> NthExtractor
+businessDay' = buildNthFromDirectConstructor . addBusinessDays
 
-mon, tue, wed, thu, fri, sat, sun :: NthExtractor
+businessDay :: HasCallStack => HolidayCalendars -> Text -> NthExtractor
+businessDay cals name = maybe (throw $ HolidayCalenderNotAvailable name)  businessDay' $ cals HM.!? name
+
+mon, tue, wed, thu, fri, sat, sun :: HasCallStack => NthExtractor
 [sun, mon, tue, wed, thu, fri, sat] = buildNthFromDirectConstructor . flip nextNthWeekday . DayOfWeek <$>
   [0..6]
 
@@ -122,10 +135,40 @@ addWeekdays n day = addDays (7*weeks + bdays - wd + 1) day
   where (weeks, bdays) = divMod (n + min 5 wd - 1) 5
         wd = transformSundayTo7 day
 
+newtype WeekdayNumber = WeekdayNumber { getWeekdayNumber :: Int }
+  deriving (Real, Num, Ord, Eq, Integral, Enum, Show)
+
+weekdayNumber :: Day -> WeekdayNumber
+weekdayNumber d = let (w,r) = divMod (2 + getDay d) 7 in WeekdayNumber $ w*5 + min 4 r
+
+-- | gives the expected result when both days are weekdays
+-- 
+-- if an input is on a weekend, the result is the same as if substituted by the previou friday
+diffWeekdays :: Day -> Day -> Int
+diffWeekdays = on (-) $ getWeekdayNumber . weekdayNumber
+
 transformSundayTo7 :: Day -> Int
-transformSundayTo7 d = case getDayOfWeek $ dayToDayOfWeek d of { 0 -> 7 ; x -> x }
+transformSundayTo7 d = case getDayOfWeek $ dayOfWeek d of { 0 -> 7 ; x -> x }
 
 nextNthWeekday :: Int -> DayOfWeek -> Day -> Day
 nextNthWeekday n target day = addDays (7*(n-1) + days) day
-  where days = ((7 + getDayOfWeek target - getDayOfWeek (dayToDayOfWeek day) - 1) `mod` 7) + 1
+  where days = ((7 + getDayOfWeek target - getDayOfWeek (dayOfWeek day) - 1) `mod` 7) + 1
   
+
+catchDayError :: MonadError Text m => (x -> Day) -> x -> m x
+catchDayError f x = catchWhnf (\e -> toS $ show (e::DateCombinatorsException)) $ seq (f x) x
+
+catchFoldDayError :: (Container f, MonadError Text m) => (x -> Day) -> f x -> m (f x)
+catchFoldDayError = mapErrors . catchDayError
+
+
+weekdayNumberFrac :: Fractional a => Day -> a
+weekdayNumberFrac d = let (w,r) = divMod (2 + getDay d) 7 in fromIntegral (w*5) +
+  case r of
+    5 -> 13/3
+    6 -> 14/3
+    x -> fromIntegral x
+{-# INLINABLE weekdayNumberFrac #-}
+{-# SPECIALIZE weekdayNumberFrac :: Day -> Double #-}
+{-# SPECIALIZE weekdayNumberFrac :: Day -> Float #-}
+{-# SPECIALIZE weekdayNumberFrac :: Day -> Rational #-}
